@@ -43,131 +43,118 @@ uint32_t buildCFPHeader(CAN_CFP_HEADER header){
 
 CAN_CFP_DATA receiveCFP(){
   // Check if a packet has been received
-
-  int packetSize = CAN.parsePacket();
-  if (packetSize) {
-    int availableBytes = CAN.available();
+  twai_message_t message;
+  if (twai_receive(&message, 0) != ESP_OK){
+    return {NULL, 0};
+  } else{
+    int availableBytes = message.data_length_code;
 
     // received a packet
-    Serial.print ("Received Bytes: ");
-    Serial.println(CAN.packetDlc());
-    if (!CAN.packetExtended()) {
+    if(DEBUG){
+      Serial.print ("Received Bytes: ");
+      Serial.println(availableBytes);
+    }
+
+    if (!message.extd) {
       Serial.print ("Not a extended header");
 
-      CAN.flush();
+      twai_clear_receive_queue(); // Clean the receive queue
       return {NULL, 0};
     }
 
-    Serial.print ("packet with id 0x");
-    Serial.print (CAN.packetId(), HEX);
-
-    // Create a buffer with the received data
-    uint8_t* msg = new uint8_t[availableBytes];
-
-    uint8_t readedBytes = 0;
-    if(readedBytes = CAN.readBytes(msg, availableBytes) != availableBytes){
-      Serial.print("Failed to read");
-      Serial.printf("Readed: %d bytes from %d availableBytes\n", readedBytes, availableBytes);
-      CAN.flush();
-      return {NULL, 0};
+    if(DEBUG){
+      Serial.printf("Packet with id 0x%X\n", message.identifier);
     }
     
-
-    Serial.println("Reading extended id");
-    uint32_t id = CAN.packetId();
+    // Create a buffer with the received data
+    uint8_t* msg = message.data;
     
     CAN_CFP_HEADER* cfp_id = (CAN_CFP_HEADER*) malloc(sizeof(CAN_CFP_HEADER));
 
-    parseCFPHeader(id, cfp_id);
+    parseCFPHeader(message.identifier, cfp_id);
 
     uint8_t remain = cfp_id->remain;
     uint8_t num_packets = remain + 1;
 
     // Create a packet structure
     CAN_CFP_DATA res;
-
+    
     // Create buffer with the info of the packet
-    uint8_t* buff = (uint8_t*) malloc(CAN.packetDlc() + remain * CAN_MAX_LENGTH);
+    uint8_t* buff = (uint8_t*) malloc(availableBytes + remain * CAN_MAX_LENGTH);
     uint8_t* buff_p = buff;
 
     res.data = buff;
 
-    Serial.printf("Malloc: %d\n", CAN.packetDlc() + remain * CAN_MAX_LENGTH);
-    memset(buff_p, 0, CAN.packetDlc() + remain * CAN_MAX_LENGTH);
+    if (DEBUG) Serial.printf("Malloc: %d\n", availableBytes + remain * CAN_MAX_LENGTH);
+    memset(buff_p, 0, availableBytes + remain * CAN_MAX_LENGTH);
 
     uint8_t start = 0;
-    uint8_t end = min(start + CAN_MAX_LENGTH, CAN.packetDlc());
+    uint8_t end = min(start + CAN_MAX_LENGTH, availableBytes);
 
     memcpy(buff_p, msg, end - start);
 
-    buff_p = buff_p + end - start;
+    buff_p = buff_p + end - start;  // Update pointer
 
-    delete[] msg;
+
     free(cfp_id);
-
-    Serial.printf("Reading from %d to %d, remain %d", start, end, remain);
+    if (DEBUG) Serial.printf("Reading from %d to %d, remain %d\n", start, end, remain);
 
     while(remain > 0){
-      // Receive the next packet
-      packetSize = CAN.parsePacket();
-      if (packetSize) {
-        availableBytes = CAN.available();
+      Serial.println("Continue reading");
+
+      // Check if a packet has been received
+      twai_message_t message;
+      if (twai_receive(&message, 0) != ESP_OK){
+        return {NULL, 0};
+      } else{
+        availableBytes = message.data_length_code;
 
         // received a packet
-        Serial.print ("Received ");
-        if (!CAN.packetExtended()) {
+        if(DEBUG){
+          Serial.print ("Received Bytes: ");
+          Serial.println(availableBytes);
+        }
+
+        if (!message.extd) {
           Serial.print ("Not a extended header");
 
-          CAN.flush();
+          twai_clear_receive_queue(); // Clean the receive queue
           return {NULL, 0};
         }
 
-        Serial.print ("packet with id 0x");
-        Serial.print (CAN.packetId(), HEX);
+        if(DEBUG){
+          Serial.printf("Packet with id 0x%X\n", message.identifier);
+        }
 
         // Create a buffer with the received data
-        msg = new uint8_t[availableBytes];
-        readedBytes = 0;
-        if(readedBytes = CAN.readBytes(msg, availableBytes) != availableBytes){
-          Serial.print("Failed to read");
-          Serial.printf("Readed: %d bytes from %d availableBytes\n", readedBytes, availableBytes);
-          CAN.flush();
-          return {NULL, 0};
-        }
-
-        Serial.println("Reading extended id");
-        id = CAN.packetId();
+        uint8_t* msg = message.data;
         
-        cfp_id = (CAN_CFP_HEADER*) malloc(sizeof(CAN_CFP_HEADER));
+        CAN_CFP_HEADER* cfp_id = (CAN_CFP_HEADER*) malloc(sizeof(CAN_CFP_HEADER));
 
-        parseCFPHeader(id, cfp_id);
+        parseCFPHeader(message.identifier, cfp_id);
 
         remain = cfp_id->remain;
 
         start = end;
-        end = min(start + CAN_MAX_LENGTH, start + CAN.packetDlc());
+        end = min(start + CAN_MAX_LENGTH, start + availableBytes);
 
         memcpy(buff_p, msg, end - start);
-        delete[] msg;
 
         buff_p = buff_p + end - start;
 
-        Serial.printf("Reading from %d to %d, remain %d", start, end, remain);
-
+        if (DEBUG) Serial.printf("Reading from %d to %d, remain %d\n", start, end, remain);
       }
     }
 
     res.length = end;
+    res.data = (uint8_t*) realloc(res.data, end); // Adjust the buffer
 
     return res;
-  }
-  else{
-    return {NULL, 0};
   }
 }
 
 void sendCFP(CAN_CFP_DATA frame_data, uint8_t source, uint8_t destination, uint16_t id){
-
+  
   uint8_t* data = frame_data.data; // Pointer to data
   
   uint8_t num_packets = (frame_data.length - 1) / CAN_MAX_LENGTH + 1;
@@ -186,11 +173,25 @@ void sendCFP(CAN_CFP_DATA frame_data, uint8_t source, uint8_t destination, uint1
   uint8_t end = min(start + CAN_MAX_LENGTH, (int) frame_data.length);
 
   Serial.printf("Sending from %d to %d, remain %d\n", start, end, remain);
-
+  
   // Send first packet
-  CAN.beginExtendedPacket(can_cfp_id);
-  CAN.write(data, end - start);
-  CAN.endPacket();
+  //Configure message to transmit
+  twai_message_t message;
+  message.identifier = can_cfp_id;
+  message.extd = 1;
+  message.rtr = 0;
+  message.data_length_code = end - start;
+  memcpy(message.data, data, end-start);
+
+  Serial.println(data[0]);
+
+  //Queue message for transmission
+  if (twai_transmit(&message, 0) == ESP_OK) {
+      if(DEBUG) printf("Message queued for transmission\n");
+  } else {
+      printf("Failed to queue message for transmission\n");
+      return;
+  }
 
   data += end - start; // Update pointer
 
@@ -207,10 +208,22 @@ void sendCFP(CAN_CFP_DATA frame_data, uint8_t source, uint8_t destination, uint1
 
     Serial.printf("Sending from %d to %d, remain %d\n", start, end, remain);
 
-    CAN.beginExtendedPacket(can_cfp_id);
-    CAN.write(data, end - start);
-    CAN.endPacket();
+    twai_message_t message;
+    message.identifier = can_cfp_id;
+    message.extd = 1;
+    message.data_length_code = end - start;
+    message.rtr = 0;
+    memcpy(message.data, data, end-start);
 
+    Serial.println(data[0]);
+
+    //Queue message for transmission
+    if (twai_transmit(&message, 0) == ESP_OK) {
+        if(DEBUG) printf("Message queued for transmission\n");
+    } else {
+        printf("Failed to queue message for transmission\n");
+        return;
+    }
     data += end - start; // Update pointer
   }
 }

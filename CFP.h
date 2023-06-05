@@ -7,7 +7,9 @@
 
 #include <Arduino.h>
 
-#include <CAN.h>
+#include <driver/twai.h>      // ESP32 CAN Protocol
+
+#define DEBUG true // Print messages for debugging
 
 #define CAN_MAX_LENGTH 8
 
