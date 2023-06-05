@@ -49,7 +49,10 @@ CAN_CFP_HEADER createCFPHeader(uint8_t source, uint8_t destination, uint8_t type
 
 uint32_t buildCFPHeader(CAN_CFP_HEADER header);
 
-void listeCFP();
+/**
+ * Receive a CFP Packet. If a packet is available and received correctly it return a CAN_CFP_DATA struct, otherwise null.
+*/
+CAN_CFP_DATA receiveCFP();
 
 void sendCFP(CAN_CFP_DATA frame_data, uint8_t source, uint8_t destination, uint16_t id);
 

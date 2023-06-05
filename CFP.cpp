@@ -41,7 +41,7 @@ uint32_t buildCFPHeader(CAN_CFP_HEADER header){
   return res;
 }
 
-void listeCFP(){
+CAN_CFP_DATA receiveCFP(){
   // Check if a packet has been received
 
   int packetSize = CAN.parsePacket();
@@ -55,7 +55,7 @@ void listeCFP(){
       Serial.print ("Not a extended header");
 
       CAN.flush();
-      return;
+      return {NULL, 0};
     }
 
     Serial.print ("packet with id 0x");
@@ -69,7 +69,7 @@ void listeCFP(){
       Serial.print("Failed to read");
       Serial.printf("Readed: %d bytes from %d availableBytes\n", readedBytes, availableBytes);
       CAN.flush();
-      return;
+      return {NULL, 0};
     }
     
 
@@ -83,9 +83,14 @@ void listeCFP(){
     uint8_t remain = cfp_id->remain;
     uint8_t num_packets = remain + 1;
 
+    // Create a packet structure
+    CAN_CFP_DATA res;
+
     // Create buffer with the info of the packet
     uint8_t* buff = (uint8_t*) malloc(CAN.packetDlc() + remain * CAN_MAX_LENGTH);
     uint8_t* buff_p = buff;
+
+    res.data = buff;
 
     Serial.printf("Malloc: %d\n", CAN.packetDlc() + remain * CAN_MAX_LENGTH);
     memset(buff_p, 0, CAN.packetDlc() + remain * CAN_MAX_LENGTH);
@@ -114,7 +119,7 @@ void listeCFP(){
           Serial.print ("Not a extended header");
 
           CAN.flush();
-          return;
+          return {NULL, 0};
         }
 
         Serial.print ("packet with id 0x");
@@ -127,7 +132,7 @@ void listeCFP(){
           Serial.print("Failed to read");
           Serial.printf("Readed: %d bytes from %d availableBytes\n", readedBytes, availableBytes);
           CAN.flush();
-          return;
+          return {NULL, 0};
         }
 
         Serial.println("Reading extended id");
@@ -152,11 +157,12 @@ void listeCFP(){
       }
     }
 
-    Serial.println("Reading buffer");
-    for(int i = 0; i < end; i++){
-      Serial.println(buff[i]);
-    }
+    res.length = end;
 
+    return res;
+  }
+  else{
+    return {NULL, 0};
   }
 }
 
