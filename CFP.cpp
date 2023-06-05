@@ -62,6 +62,13 @@ CAN_CFP_DATA receiveCFP(){
       return {NULL, 0};
     }
 
+    if (message.rtr) {
+      Serial.print ("The message is a Remote Frame");
+
+      twai_clear_receive_queue(); // Clean the receive queue
+      return {NULL, 0};
+    }
+
     if(DEBUG){
       Serial.printf("Packet with id 0x%X\n", message.identifier);
     }
