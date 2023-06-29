@@ -160,6 +160,132 @@ CAN_CFP_DATA receiveCFP(){
   }
 }
 
+CAN_CFP_DATA receiveCFP(uint8_t destination){
+    // Check if a packet has been received
+  twai_message_t message;
+  if (twai_receive(&message, 0) != ESP_OK){
+    return {NULL, 0};
+  } else{
+    int availableBytes = message.data_length_code;
+
+    // received a packet
+    if(DEBUG){
+      Serial.print ("Received Bytes: ");
+      Serial.println(availableBytes);
+    }
+
+    if (!message.extd) {
+      Serial.print ("Not a extended header");
+
+      twai_clear_receive_queue(); // Clean the receive queue
+      return {NULL, 0};
+    }
+
+    if (message.rtr) {
+      Serial.print ("The message is a Remote Frame");
+
+      twai_clear_receive_queue(); // Clean the receive queue
+      return {NULL, 0};
+    }
+
+    if(DEBUG){
+      Serial.printf("Packet with id 0x%X\n", message.identifier);
+    }
+    
+    // Create a buffer with the received data
+    uint8_t* msg = message.data;
+    
+    CAN_CFP_HEADER* cfp_id = (CAN_CFP_HEADER*) malloc(sizeof(CAN_CFP_HEADER));
+
+    parseCFPHeader(message.identifier, cfp_id);
+
+    if(cfp_id->destination != destination){
+      Serial.print ("Received a message with another destination");
+
+      twai_clear_receive_queue(); // Clean the receive queue
+      return {NULL, 0};
+    }
+
+    uint8_t remain = cfp_id->remain;
+    uint8_t num_packets = remain + 1;
+
+    // Create a packet structure
+    CAN_CFP_DATA res;
+    
+    // Create buffer with the info of the packet
+    uint8_t* buff = (uint8_t*) malloc(availableBytes + remain * CAN_MAX_LENGTH);
+    uint8_t* buff_p = buff;
+
+    res.data = buff;
+
+    if (DEBUG) Serial.printf("Malloc: %d\n", availableBytes + remain * CAN_MAX_LENGTH);
+    memset(buff_p, 0, availableBytes + remain * CAN_MAX_LENGTH);
+
+    uint8_t start = 0;
+    uint8_t end = min(start + CAN_MAX_LENGTH, availableBytes);
+
+    memcpy(buff_p, msg, end - start);
+
+    buff_p = buff_p + end - start;  // Update pointer
+
+
+    free(cfp_id);
+    if (DEBUG) Serial.printf("Reading from %d to %d, remain %d\n", start, end, remain);
+
+    while(remain > 0){
+      Serial.println("Continue reading");
+
+      // Check if a packet has been received
+      twai_message_t message;
+      if (twai_receive(&message, 0) != ESP_OK){
+        return {NULL, 0};
+      } else{
+        availableBytes = message.data_length_code;
+
+        // received a packet
+        if(DEBUG){
+          Serial.print ("Received Bytes: ");
+          Serial.println(availableBytes);
+        }
+
+        if (!message.extd) {
+          Serial.print ("Not a extended header");
+
+          twai_clear_receive_queue(); // Clean the receive queue
+          return {NULL, 0};
+        }
+
+        if(DEBUG){
+          Serial.printf("Packet with id 0x%X\n", message.identifier);
+        }
+
+        // Create a buffer with the received data
+        uint8_t* msg = message.data;
+        
+        CAN_CFP_HEADER* cfp_id = (CAN_CFP_HEADER*) malloc(sizeof(CAN_CFP_HEADER));
+
+        parseCFPHeader(message.identifier, cfp_id);
+
+        remain = cfp_id->remain;
+
+        start = end;
+        end = min(start + CAN_MAX_LENGTH, start + availableBytes);
+
+        memcpy(buff_p, msg, end - start);
+
+        buff_p = buff_p + end - start;
+
+        if (DEBUG) Serial.printf("Reading from %d to %d, remain %d\n", start, end, remain);
+      }
+    }
+
+    res.length = end;
+    res.data = (uint8_t*) realloc(res.data, end); // Adjust the buffer
+
+    return res;
+  }
+}
+
 void sendCFP(CAN_CFP_DATA frame_data, uint8_t source, uint8_t destination, uint16_t id){
   
   uint8_t* data = frame_data.data; // Pointer to data

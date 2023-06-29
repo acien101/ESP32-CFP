@@ -56,6 +56,11 @@ uint32_t buildCFPHeader(CAN_CFP_HEADER header);
 */
 CAN_CFP_DATA receiveCFP();
 
+/**
+ * Receive a CFP Packet with a given destionation id. If a packet is available and received correctly it return a CAN_CFP_DATA struct, otherwise null.
+*/
+CAN_CFP_DATA receiveCFP(uint8_t destination);
+
 void sendCFP(CAN_CFP_DATA frame_data, uint8_t source, uint8_t destination, uint16_t id);
 
 void printCFPHeader(CAN_CFP_HEADER* packet);
