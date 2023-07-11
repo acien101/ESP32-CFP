@@ -1,14 +1,13 @@
-# Arduino CAN Fragmentation Protocol
+# ESP CAN Fragmentation Protocol
 
-- Source:       5 bits
-   - Destination:  5 bits
-   - Type:         1 bit
-   - Remain:       8 bits
-   - Identifier:   10 bits
+The CAN Fragmentation Protocol was introduced by the [CubeSat Space Protocol](https://github.com/libcsp/libcsp) that implements fragmentation and reassembly methods for CAN messages, fixing the limitation of 8-byte maximum payload in each message. The original C code is based on a larger project that relies on the FreeRTOS operating system, which complicates its reuse in different contexts or with other operating systems. ESP-CAN implements the CFP protocol from scratch with a modular library that can be easily integrated into a variety of projects. It uses the built-it CAN controller of ESP32 by using the [TWAI driver from Espressif](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/twai.html).
 
-   The \b Source and \b Destination fields must match the source and destiantion addressses in the CSP packet.
-   The \b Type field is used to distinguish the first and subsequent frames in a fragmented CSP
-   packet. Type is BEGIN (0) for the first fragment and MORE (1) for all other fragments.
-   The \b Remain field indicates number of remaining fragments, and must be decremented by one for each fragment sent.
-   The \b identifier field serves the same purpose as in the Internet Protocol, and should be an auto incrementing
-   integer to uniquely separate sessions.
+CFP uses the features of CAN to add a layer of fragmentation and reassembly without adding overhead, making it compatible with all the current systems based on CAN. The second version of CAN, CAN-2.0B, has a unique 29-bit identifier in every message which also represents the message priority. The information of fragmentation is embedded on the 29-bit id of each message. The structure of the ID is the next one:
+
+![](./pics/CAN_Comm.svg)
+
+The *source* and *destination* fields must match the source and destination addresses. With a maximum of 16 different addresses, each subsystem will have an unique identifier. This field is used to read messages that are directed to the correct destination, dropping the remain packets. The *type* field is used to distinguish the first and subsequent frames in a fragmented CSP packet. *Type* is **BEGIN (0)** for the first fragment and **MORE (1)** for all other fragments. The *remain* field indicates number of remaining fragments, and must be decremented by one for each fragment sent. The *identifier* field serves the same purpose as in the Internet Protocol, and should be an auto incrementing integer to uniquely separate sessions.
+
+The ESP32 has a built-in CAN controller, that is referred as Two-Wire Automotive Interface (TWAI). The manufacturer, Espressif, has created a driver for the controller with detailed description about its usage. The proposed implementation of CFP is based on the TWAI driver of ESP32 to send and receive the CAN messages.
+
+ESP-CAN is written on C++ with the Arduino framework, using the directory structure of Arduino. It has a directory with examples that explains the main functionalities of the library. The main functions are *sendCFP and *receiveCFP*. When you need to transmit data, you employ the *sendCFP* function. This function takes the required arguments, constructs the CFP identifier, and then sends the contents of the provided buffer as a sequence of fragmented messages. On the flip side, when you are in the receiving mode, you utilize the *receiveCFP* function. This function continuously listens for available CAN packets. Upon detecting a packet, it receives the complete CFP frame and returns the data, which has been reassembled from the fragmented messages. This process ensures seamless transmission and reception of larger data packets over the CAN network, all while maintaining a modular and straightforward approach.
