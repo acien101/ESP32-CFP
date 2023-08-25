@@ -81,7 +81,6 @@ CAN_CFP_DATA receiveCFP(){
     parseCFPHeader(message.identifier, cfp_id);
 
     uint8_t remain = cfp_id->remain;
-    uint8_t num_packets = remain + 1;
 
     // Create a packet structure
     CAN_CFP_DATA res;
@@ -207,7 +206,6 @@ CAN_CFP_DATA receiveCFP(uint8_t destination){
     }
 
     uint8_t remain = cfp_id->remain;
-    uint8_t num_packets = remain + 1;
 
     // Create a packet structure
     CAN_CFP_DATA res;
